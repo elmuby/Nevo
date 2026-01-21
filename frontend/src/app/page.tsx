@@ -1,10 +1,21 @@
-
+import { Navigation } from "@/components/Navigation";
+import { HeroSection } from "@/components/HeroSection";
+import { FeaturesSection } from "@/components/FeaturesSection";
+import { HowItWorksSection } from "@/components/HowItWorksSection";
+import { SecuritySection } from "@/components/SecuritySection";
+import { CTASection } from "@/components/CTASection";
+import { Footer } from "@/components/Footer";
 
 export default function Home() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen py-2">
-      <h1 className="text-4xl font-bold mb-4">Welcome to Nevo</h1>
-      <p className="text-lg mb-8">Decentralized Donation Pools on Stellar.</p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50 dark:from-slate-950 dark:via-blue-950 dark:to-slate-950">
+      <Navigation />
+      <HeroSection />
+      <FeaturesSection />
+      <HowItWorksSection />
+      <SecuritySection />
+      <CTASection />
+      <Footer />
     </div>
   );
 }
