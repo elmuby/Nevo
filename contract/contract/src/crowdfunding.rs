@@ -1,9 +1,12 @@
-use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String};
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String, Vec};
 
 use crate::base::{
     errors::CrowdfundingError,
     events,
-    types::{CampaignDetails, PoolConfig, PoolMetrics, PoolState, StorageKey},
+    types::{
+        CampaignDetails, DisbursementRequest, MultiSigConfig, PoolConfig, PoolMetrics, PoolState,
+        StorageKey,
+    },
 };
 use crate::interfaces::crowdfunding::CrowdfundingTrait;
 
@@ -72,6 +75,8 @@ impl CrowdfundingTrait for CrowdfundingContract {
         creator: Address,
         target_amount: i128,
         deadline: u64,
+        required_signatures: Option<u32>,
+        signers: Option<Vec<Address>>,
     ) -> Result<u64, CrowdfundingError> {
         if Self::is_paused(env.clone()) {
             return Err(CrowdfundingError::ContractPaused);
@@ -90,6 +95,25 @@ impl CrowdfundingTrait for CrowdfundingContract {
         if deadline <= env.ledger().timestamp() {
             return Err(CrowdfundingError::InvalidPoolDeadline);
         }
+
+        // Validate multi-sig configuration if provided
+        let multi_sig_config = match (required_signatures, signers) {
+            (Some(req_sigs), Some(signer_list)) => {
+                let signer_count = signer_list.len() as u32;
+                if req_sigs == 0 || req_sigs > signer_count {
+                    return Err(CrowdfundingError::InvalidMultiSigConfig);
+                }
+                if signer_list.len() == 0 {
+                    return Err(CrowdfundingError::InvalidSignerCount);
+                }
+                Some(MultiSigConfig {
+                    required_signatures: req_sigs,
+                    signers: signer_list,
+                })
+            }
+            (None, None) => None,
+            _ => return Err(CrowdfundingError::InvalidMultiSigConfig),
+        };
 
         // Generate unique pool ID
         let next_id_key = StorageKey::NextPoolId;
@@ -118,6 +142,12 @@ impl CrowdfundingTrait for CrowdfundingContract {
 
         // Store pool configuration
         env.storage().instance().set(&pool_key, &pool_config);
+
+        // Store multi-sig config separately if provided
+        if let Some(config) = multi_sig_config {
+            let multi_sig_key = StorageKey::MultiSigConfig(pool_id);
+            env.storage().instance().set(&multi_sig_key, &config);
+        }
 
         // Initialize pool state as Active
         let state_key = StorageKey::PoolState(pool_id);
@@ -293,7 +323,13 @@ impl CrowdfundingTrait for CrowdfundingContract {
         let topics = (soroban_sdk::Symbol::new(&env, "contribution"), pool_id);
         env.events().publish(
             topics,
-            (contributor, asset, amount, env.ledger().timestamp(), is_private),
+            (
+                contributor,
+                asset,
+                amount,
+                env.ledger().timestamp(),
+                is_private,
+            ),
         );
 
         Ok(())
