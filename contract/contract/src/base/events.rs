@@ -56,3 +56,20 @@ pub fn contribution(
     env.events()
         .publish(topics, (contributor, asset, amount, timestamp, is_private));
 }
+
+pub fn emergency_withdraw_requested(
+    env: &Env,
+    admin: Address,
+    token: Address,
+    amount: i128,
+    unlock_time: u64,
+) {
+    let topics = (Symbol::new(env, "emergency_withdraw_requested"), admin);
+    env.events()
+        .publish(topics, (token, amount, unlock_time));
+}
+
+pub fn emergency_withdraw_executed(env: &Env, admin: Address, token: Address, amount: i128) {
+    let topics = (Symbol::new(env, "emergency_withdraw_executed"), admin);
+    env.events().publish(topics, (token, amount));
+}

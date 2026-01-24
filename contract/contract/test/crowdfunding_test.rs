@@ -724,3 +724,47 @@ fn test_contribute_and_event_emission() {
     // (We've confirmed that env.events().all() has issues in this test setup,
     // but the snapshot recorder will capture the events if they are emitted.)
 }
+
+#[test]
+fn test_emergency_withdraw() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    // Register a mock token
+    let token_admin = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract(token_admin.clone());
+    let token_client = soroban_sdk::token::Client::new(&env, &token_id);
+    let token_admin_client = soroban_sdk::token::StellarAssetClient::new(&env, &token_id);
+
+    let contract_id = env.register(CrowdfundingContract, ());
+    let client = CrowdfundingContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    // Send tokens to contract (simulate stuck funds)
+    // We mint to contract_id directly to simulate funds being there
+    token_admin_client.mint(&contract_id, &5000i128);
+    assert_eq!(token_client.balance(&contract_id), 5000i128);
+
+    // Request emergency withdraw
+    client.request_emergency_withdraw(&token_id, &5000i128);
+
+    // Check request state implicitly by trying to execute too early
+    let result = client.try_execute_emergency_withdraw();
+    assert_eq!(
+        result,
+        Err(Ok(CrowdfundingError::EmergencyWithdrawalPeriodNotPassed))
+    );
+
+    // Fast forward 25 hours (25 * 3600 = 90000)
+    let current_time = env.ledger().timestamp();
+    env.ledger().with_mut(|li| li.timestamp = current_time + 90000);
+
+    // Execute
+    client.execute_emergency_withdraw();
+
+    // Verify balances
+    assert_eq!(token_client.balance(&contract_id), 0i128);
+    assert_eq!(token_client.balance(&admin), 5000i128);
+}

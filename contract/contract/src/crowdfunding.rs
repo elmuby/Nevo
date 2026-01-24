@@ -4,8 +4,8 @@ use crate::base::{
     errors::CrowdfundingError,
     events,
     types::{
-        CampaignDetails, DisbursementRequest, MultiSigConfig, PoolConfig, PoolMetrics, PoolState,
-        StorageKey,
+        CampaignDetails, DisbursementRequest, EmergencyWithdrawal, MultiSigConfig, PoolConfig,
+        PoolMetrics, PoolState, StorageKey,
     },
 };
 use crate::interfaces::crowdfunding::CrowdfundingTrait;
@@ -331,6 +331,86 @@ impl CrowdfundingTrait for CrowdfundingContract {
                 is_private,
             ),
         );
+
+        Ok(())
+    }
+
+    fn request_emergency_withdraw(
+        env: Env,
+        token: Address,
+        amount: i128,
+    ) -> Result<(), CrowdfundingError> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&StorageKey::Admin)
+            .ok_or(CrowdfundingError::CampaignNotFound)?;
+        admin.require_auth();
+
+        if env
+            .storage()
+            .instance()
+            .has(&StorageKey::EmergencyWithdrawal)
+        {
+            return Err(CrowdfundingError::EmergencyWithdrawalAlreadyRequested);
+        }
+
+        let now = env.ledger().timestamp();
+        let grace_period = 86400; // 24 hours
+
+        let request = EmergencyWithdrawal {
+            recipient: admin.clone(),
+            amount,
+            token: token.clone(),
+            requested_at: now,
+            executed: false,
+        };
+
+        env.storage()
+            .instance()
+            .set(&StorageKey::EmergencyWithdrawal, &request);
+
+        events::emergency_withdraw_requested(&env, admin, token, amount, now + grace_period);
+
+        Ok(())
+    }
+
+    fn execute_emergency_withdraw(env: Env) -> Result<(), CrowdfundingError> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&StorageKey::Admin)
+            .ok_or(CrowdfundingError::CampaignNotFound)?;
+        admin.require_auth();
+
+        let key = StorageKey::EmergencyWithdrawal;
+        let request: EmergencyWithdrawal = env
+            .storage()
+            .instance()
+            .get(&key)
+            .ok_or(CrowdfundingError::EmergencyWithdrawalNotRequested)?;
+
+        // If for some reason it's already executed but not removed (shouldn't happen with remove)
+        if request.executed {
+            return Err(CrowdfundingError::EmergencyWithdrawalAlreadyRequested);
+        }
+
+        let now = env.ledger().timestamp();
+        let grace_period = 86400; // 24 hours
+        if now < request.requested_at + grace_period {
+            return Err(CrowdfundingError::EmergencyWithdrawalPeriodNotPassed);
+        }
+
+        use soroban_sdk::token;
+        let token_client = token::Client::new(&env, &request.token);
+        token_client.transfer(&env.current_contract_address(), &admin, &request.amount);
+
+        // Remove the request to allow future requests (or keep it as history? Requirement says "Define clear rules in storage to prevent abuse".
+        // Removing it clears the storage. If we want history, we should use a map or log events.
+        // Events are logged. Clearing storage prevents double withdrawal and clutter.
+        env.storage().instance().remove(&key);
+
+        events::emergency_withdraw_executed(&env, admin, request.token, request.amount);
 
         Ok(())
     }
