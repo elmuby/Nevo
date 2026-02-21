@@ -55,7 +55,7 @@ export default function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
         <div className="p-4 max-h-96 overflow-y-auto">
           {query ? (
             <div className="text-slate-500 dark:text-slate-400 text-sm">
-              Search results for "{query}" would appear here
+              Search results for {'"'}{query}{'"'} would appear here
             </div>
           ) : (
             <div className="text-slate-500 dark:text-slate-400 text-sm">
