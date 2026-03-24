@@ -34,9 +34,8 @@ fn create_pool(client: &CrowdfundingContractClient<'_>, env: &Env, token: &Addre
         is_private: false,
         duration: 86_400,
         created_at: env.ledger().timestamp(),
+        token_address: token.clone(),
     };
-    // create_pool requires the token to match; use contribute pattern
-    let _ = token; // token stored in contract state already
     client.create_pool(&creator, &config)
 }
 
