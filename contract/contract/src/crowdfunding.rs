@@ -1503,7 +1503,11 @@ impl CrowdfundingTrait for CrowdfundingContract {
             .unwrap_or(false)
     }
 
-    fn withdraw_platform_fees(env: Env, to: Address, amount: i128) -> Result<(), CrowdfundingError> {
+    fn withdraw_platform_fees(
+        env: Env,
+        to: Address,
+        amount: i128,
+    ) -> Result<(), CrowdfundingError> {
         let stored_admin: Address = env
             .storage()
             .instance()
