@@ -1731,6 +1731,55 @@ impl CrowdfundingTrait for CrowdfundingContract {
         Ok(())
     }
 
+    fn withdraw_event_fees(
+        env: Env,
+        admin: Address,
+        to: Address,
+        amount: i128,
+    ) -> Result<(), CrowdfundingError> {
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&StorageKey::Admin)
+            .ok_or(CrowdfundingError::NotInitialized)?;
+
+        if admin != stored_admin {
+            return Err(CrowdfundingError::Unauthorized);
+        }
+
+        admin.require_auth();
+
+        if amount <= 0 {
+            return Err(CrowdfundingError::InvalidAmount);
+        }
+
+        let event_fees_key = StorageKey::EventFeeTreasury;
+        let current_fees: i128 = env.storage().instance().get(&event_fees_key).unwrap_or(0);
+
+        if amount > current_fees {
+            return Err(CrowdfundingError::InsufficientFees);
+        }
+
+        let token_key = StorageKey::CrowdfundingToken;
+        let token_address: Address = env
+            .storage()
+            .instance()
+            .get(&token_key)
+            .ok_or(CrowdfundingError::NotInitialized)?;
+
+        use soroban_sdk::token;
+        let token_client = token::Client::new(&env, &token_address);
+        token_client.transfer(&env.current_contract_address(), &to, &amount);
+
+        env.storage()
+            .instance()
+            .set(&event_fees_key, &(current_fees - amount));
+
+        events::event_fees_withdrawn(&env, admin, to, amount);
+
+        Ok(())
+    }
+
     fn set_emergency_contact(env: Env, contact: Address) -> Result<(), CrowdfundingError> {
         let admin: Address = env
             .storage()
