@@ -305,6 +305,9 @@ impl CrowdfundingTrait for CrowdfundingContract {
 
         buyer.require_auth();
 
+        // ── reentrancy lock ──────────────────────────────────────────────────
+        reentrancy_lock_logic(&env, pool_id)?;
+
         // ── fee split ────────────────────────────────────────────────────────
         let fee_bps: u32 = env
             .storage()
@@ -345,6 +348,7 @@ impl CrowdfundingTrait for CrowdfundingContract {
             &(current_event_fee_treasury + fee_amount),
         );
 
+        release_pool_lock(&env, pool_id);
         events::ticket_sold(&env, pool_id, buyer, price, event_amount, fee_amount);
         Ok((event_amount, fee_amount))
     }
