@@ -1,5 +1,18 @@
 use soroban_sdk::{contracttype, Address, BytesN, String, Vec};
 
+/// A lightweight record stored for every emitted contract event.
+/// Used to populate the global `AllEvents` list.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EventRecord {
+    /// Sequential index (1-based) assigned at emission time.
+    pub index: u64,
+    /// Short name matching the event's topic Symbol (e.g. "pool_created").
+    pub name: String,
+    /// Ledger timestamp at the moment the event was emitted.
+    pub timestamp: u64,
+}
+
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CampaignDetails {
@@ -25,6 +38,10 @@ pub struct Contribution {
 pub struct MultiSigConfig {
     pub required_signatures: u32,
     pub signers: Vec<Address>,
+    /// When true, this multi-sig config also gates event fund withdrawals for
+    /// the associated pool (i.e. `EventPool` balance requires multi-sig approval
+    /// before disbursement, not just admin auth).
+    pub allow_event_withdrawal: bool,
 }
 
 // Updated pool configuration for donation pools
@@ -144,12 +161,32 @@ pub enum EventStatus {
 #[contracttype]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EventDetails {
-    pub id: u64,
+    pub id: BytesN<32>,
     pub title: String,
     pub creator: Address,
     pub ticket_price: i128,
     pub max_attendees: u32,
     pub deadline: u64,
+    pub token: Address,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EventMetrics {
+    pub tickets_sold: u32,
+}
+
+impl Default for EventMetrics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl EventMetrics {
+    /// Creates zero-initialized metrics for a new event.
+    pub fn new() -> Self {
+        Self { tickets_sold: 0 }
+    }
 }
 
 /// Represents the type of a ticket.
@@ -249,6 +286,24 @@ pub struct PoolContribution {
 }
 
 #[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EventMetrics {
+    pub tickets_sold: u32,
+}
+
+impl Default for EventMetrics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl EventMetrics {
+    pub fn new() -> Self {
+        Self { tickets_sold: 0 }
+    }
+}
+
+#[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum StorageKey {
     Pool(u64),
@@ -260,6 +315,7 @@ pub enum StorageKey {
     Contribution(BytesN<32>, Address),
     PoolContribution(u64, Address),
     PoolContributors(u64),
+    EventMetrics(u64),
     Event(BytesN<32>),
 
     NextPoolId,
@@ -291,6 +347,10 @@ pub enum StorageKey {
     EventPlatformFees(u64),
     // Track if someone bought a ticket
     UserTicket(u64, Address),
+    // Per-event metrics (tickets sold, etc.)
+    EventMetrics(BytesN<32>),
+    // Marks that an event pool's funds have been fully withdrawn
+    EventDrained(u64),
 }
 
 #[cfg(test)]
@@ -463,18 +523,22 @@ mod tests {
         use soroban_sdk::testutils::Address as _;
         let env = Env::default();
         let creator = soroban_sdk::Address::generate(&env);
+        let token = soroban_sdk::Address::generate(&env);
+        let id = soroban_sdk::BytesN::from_array(&env, &[1u8; 32]);
         let event = EventDetails {
-            id: 1,
+            id: id.clone(),
             title: String::from_str(&env, "Nevo Launch"),
             creator: creator.clone(),
             ticket_price: 500,
             max_attendees: 100,
             deadline: 1_700_000_000,
+            token: token.clone(),
         };
-        assert_eq!(event.id, 1);
+        assert_eq!(event.id, id);
         assert_eq!(event.ticket_price, 500);
         assert_eq!(event.max_attendees, 100);
         assert_eq!(event.deadline, 1_700_000_000);
         assert_eq!(event.creator, creator);
+        assert_eq!(event.token, token);
     }
 }
