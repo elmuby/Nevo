@@ -292,6 +292,20 @@ impl CrowdfundingTrait for CrowdfundingContract {
             return Err(CrowdfundingError::InvalidPoolState);
         }
 
+        // Capacity validation
+        let mut id_bytes = [0u8; 32];
+        let bytes = pool_id.to_be_bytes();
+        id_bytes[24..].copy_from_slice(&bytes);
+        let event_id = BytesN::from_array(&env, &id_bytes);
+        let event_key = StorageKey::Event(event_id.clone());
+        let details: EventDetails = env.storage().instance().get(&event_key)
+            .ok_or(CrowdfundingError::PoolNotFound)?;
+        let metrics_key = StorageKey::EventMetrics(event_id);
+
+        if metrics.tickets_sold >= details.max_attendees {
+            return Err(CrowdfundingError::EventSoldOut);
+        }
+
         // Verify asset matches the contract token
         let token_key = StorageKey::CrowdfundingToken;
         let contract_token: Address = env
@@ -344,6 +358,16 @@ impl CrowdfundingTrait for CrowdfundingContract {
             &event_fee_treasury_key,
             &(current_event_fee_treasury + fee_amount),
         );
+
+        // Update tickets sold metrics
+        let mut id_bytes = [0u8; 32];
+        let bytes = pool_id.to_be_bytes();
+        id_bytes[24..].copy_from_slice(&bytes);
+        let event_id = BytesN::from_array(&env, &id_bytes);
+        let metrics_key = StorageKey::EventMetrics(event_id);
+        let mut metrics: EventMetrics = env.storage().instance().get(&metrics_key).unwrap_or_default();
+        metrics.tickets_sold += 1;
+        env.storage().instance().set(&metrics_key, &metrics);
 
         events::ticket_sold(&env, pool_id, buyer, price, event_amount, fee_amount);
         Ok((event_amount, fee_amount))
