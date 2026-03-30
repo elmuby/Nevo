@@ -345,10 +345,12 @@ pub enum StorageKey {
     EventPool(u64),
     // Per-pool revenue split: tokens accumulated as platform fee
     EventPlatformFees(u64),
+
     // Track if someone bought a ticket
     UserTicket(u64, Address),
     // Per-event metrics (tickets sold, etc.)
     EventMetrics(BytesN<32>),
+
     // Marks that an event pool's funds have been fully withdrawn
     EventDrained(u64),
 }
