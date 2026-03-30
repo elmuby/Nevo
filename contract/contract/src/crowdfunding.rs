@@ -337,6 +337,9 @@ impl CrowdfundingTrait for CrowdfundingContract {
 
         buyer.require_auth();
 
+        // ── reentrancy lock ──────────────────────────────────────────────────
+        reentrancy_lock_logic(&env, pool_id)?;
+
         // ── fee split ────────────────────────────────────────────────────────
         let fee_bps: u32 = env
             .storage()

@@ -439,3 +439,16 @@ pub fn contract_upgraded(env: &Env, new_wasm_hash: BytesN<32>) {
     let topics = (Symbol::new(env, "contract_upgraded"), new_wasm_hash);
     env.events().publish(topics, ());
 }
+
+pub fn ticket_purchased(
+    env: &Env,
+    pool_id: u64,
+    buyer: Address,
+    price: i128,
+    event_amount: i128,
+    fee_amount: i128,
+) {
+    let topics = (Symbol::new(env, "ticket_purchased"), pool_id, buyer);
+    env.events()
+        .publish(topics, (price, event_amount, fee_amount));
+}
