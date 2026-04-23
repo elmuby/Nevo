@@ -11,10 +11,6 @@ use crate::base::{
         acquire_emergency_lock, reentrancy_lock_logic, release_emergency_lock, release_pool_lock,
     },
     types::{
-        CampaignDetails, CampaignLifecycleStatus, CampaignMetrics, Contribution,
-        EmergencyWithdrawal, MultiSigConfig, PoolConfig, PoolContribution, PoolMetadata,
-        PoolMetrics, PoolState, StorageKey, MAX_DESCRIPTION_LENGTH, MAX_HASH_LENGTH,
-        MAX_STRING_LENGTH, MAX_URL_LENGTH,
         ApplicationStatus, CampaignDetails, CampaignLifecycleStatus, CampaignMetrics, Contribution,
         EmergencyWithdrawal, EventDetails, EventMetrics, MultiSigConfig, PoolConfig,
         PoolContribution, PoolMetadata, PoolMetrics, PoolState, ScholarshipApplication, StorageKey,
@@ -966,7 +962,11 @@ impl CrowdfundingTrait for CrowdfundingContract {
         if sponsor_balance < config.target_amount {
             return Err(CrowdfundingError::InsufficientSponsorBalance);
         }
-        token_client.transfer(&creator, &env.current_contract_address(), &config.target_amount);
+        token_client.transfer(
+            &creator,
+            &env.current_contract_address(),
+            &config.target_amount,
+        );
 
         // Record the locked balance for this pool
         env.storage()
@@ -1214,15 +1214,15 @@ impl CrowdfundingTrait for CrowdfundingContract {
         }
 
         let metadata_key = StorageKey::PoolMetadata(pool_id);
-        let mut metadata: PoolMetadata = env
-            .storage()
-            .persistent()
-            .get(&metadata_key)
-            .unwrap_or(PoolMetadata {
-                description: String::from_str(&env, ""),
-                external_url: String::from_str(&env, ""),
-                image_hash: String::from_str(&env, ""),
-            });
+        let mut metadata: PoolMetadata =
+            env.storage()
+                .persistent()
+                .get(&metadata_key)
+                .unwrap_or(PoolMetadata {
+                    description: String::from_str(&env, ""),
+                    external_url: String::from_str(&env, ""),
+                    image_hash: String::from_str(&env, ""),
+                });
 
         metadata.image_hash = new_hash.clone();
         env.storage().persistent().set(&metadata_key, &metadata);
@@ -1242,21 +1242,21 @@ impl CrowdfundingTrait for CrowdfundingContract {
         if Self::is_paused(env.clone()) {
             return Err(CrowdfundingError::ContractPaused);
         }
-        
+
         // Authorize caller - must be pool creator or validator
         let pool_key = StorageKey::Pool(pool_id);
         if !env.storage().instance().has(&pool_key) {
             return Err(CrowdfundingError::PoolNotFound);
         }
-        
+
         let pool: PoolConfig = env.storage().instance().get(&pool_key).unwrap();
         let creator_key = StorageKey::PoolCreator(pool_id);
         let creator: Address = env.storage().instance().get(&creator_key).unwrap();
-        
+
         if caller != creator && caller != pool.validator {
             return Err(CrowdfundingError::Unauthorized);
         }
-        
+
         caller.require_auth();
 
         // Validate state transition (optional - could add more complex logic)
